@@ -161,52 +161,57 @@ def automated_trading_loop():
     )
 
     quote_manager = QuoteManager(api)
-    # 訂閱台指期近月的即時報價，並回補當日歷史資料
+    # 訂閱微台近一的即時報價，並回補當日歷史資料
     quote_manager.subscribe_fop_tick(["TMFR1"], recover=True)
 
     # 交易狀態旗標，確保只下單一次
     order_placed = False
-    
+    last_tick_count = 0  # 用於追蹤已處理的 tick 數量
+
     try:
         while not order_placed:
             # 1. 獲取最新的報價 DataFrame
             df_ticks = quote_manager.get_df_fop()
 
-            if len(df_ticks) < 5:
-                print(f"資料不足5筆，無法計算5MA。目前共 {len(df_ticks)} 筆。")
-                time.sleep(1)
-                continue
+            # 只有在新報價進來時才處理和印出
+            if len(df_ticks) > last_tick_count:
+                last_tick_count = len(df_ticks)
 
-            # 2. 定義並檢查交易條件
-            # 計算最近5筆tick的移動平均價
-            ma_5 = df_ticks["price"].tail(5).mean()
-            current_price = df_ticks["price"].tail(1).item()
-            previous_price = df_ticks["price"].tail(2).head(1).item()
+                if len(df_ticks) < 5:
+                    print(f"資料不足5筆，無法計算5MA。目前共 {len(df_ticks)} 筆。")
+                else:
+                    # 2. 定義並檢查交易條件
+                    # 計算最近5筆tick的移動平均價
+                    ma_5 = df_ticks["price"].tail(5).mean()
+                    current_price = df_ticks["price"].tail(1).item()
+                    previous_price = df_ticks["price"].tail(2).head(1).item()
 
-            print(f"時間: {df_ticks['datetime'].tail(1).item()} | 最新價: {current_price:.2f} | 5MA: {ma_5:.2f} | 上一筆價: {previous_price:.2f}")
+                    print(
+                        f"時間: {df_ticks['datetime'].tail(1).item()} | 最新價: {current_price:.2f} | 5MA: {ma_5:.2f} | 上一筆價: {previous_price:.2f}"
+                    )
 
-            # 交易條件：價格從下方突破5期均線
-            if previous_price < ma_5 and current_price > ma_5:
-                print("\n>>> 觸發下單條件：價格突破5期均線！ <<<")
-                
-                # 3. 執行下單
-                contract = api.Contracts.Futures["TXFR1"]
-                order = sj.order.FuturesOrder(
-                    action=Action.Buy,
-                    price=round(current_price, 2), # 以當前價格下限價單
-                    quantity=1,
-                    price_type=FuturesPriceType.LMT,
-                    order_type=OrderType.ROD,
-                    octype=FuturesOCType.Auto,
-                    account=api.futopt_account,
-                )
-                
-                trade = api.place_order(contract=contract, order=order)
-                print(f"\n下單成功: {trade}")
-                order_placed = True # 設定旗標，避免重複下單
+                    # 交易條件：價格從下方突破5期均線
+                    if previous_price < ma_5 and current_price > ma_5:
+                        print("\n>>> 觸發下單條件：價格突破5期均線！ <<<")
 
-            # 4. 短暫休眠
-            time.sleep(1) # 每秒檢查一次
+                        # 3. 執行下單
+                        contract = api.Contracts.Futures["TMFR1"]
+                        order = sj.order.FuturesOrder(
+                            action=Action.Buy,
+                            price=round(current_price, 2),  # 以當前價格下限價單
+                            quantity=1,
+                            price_type=FuturesPriceType.LMT,
+                            order_type=OrderType.ROD,
+                            octype=FuturesOCType.Auto,
+                            account=api.futopt_account,
+                        )
+
+                        trade = api.place_order(contract=contract, order=order)
+                        print(f"\n下單成功: {trade}")
+                        order_placed = True  # 設定旗標，避免重複下單
+
+            # 4. 短暫休眠，每0.5秒檢查一次
+            time.sleep(0.5)
 
     except KeyboardInterrupt:
         print("\n程式被手動中斷。")
