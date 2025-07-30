@@ -18,6 +18,7 @@ version = "sj_trading:show_version"
 stock_testing = "sj_trading.testing_flow:testing_stock_ordering"
 futures_testing = "sj_trading.testing_flow:testing_futures_ordering"
 futures_quote = "sj_trading.testing_flow:futures_quote"
+auto_trading = "sj_trading.testing_flow:automated_trading_loop"
 
 [build-system]
 requires = ["hatchling"]
