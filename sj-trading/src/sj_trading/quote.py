@@ -3,6 +3,7 @@ from typing import List, Set
 import polars as pl
 # import polars_talib as plta
 from shioaji.contracts import BaseContract
+import datetime as dt
 
 class QuoteManager:
     def __init__(self, api: sj.Shioaji):
@@ -41,9 +42,41 @@ class QuoteManager:
         self.ticks_fop_v1.append(tick)
     
     def fetch_ticks(self, contract: BaseContract) -> pl.DataFrame:
-        code = contract.code
-        ticks = self.api.ticks(contract)
-        df = pl.DataFrame(ticks.dict()).select(
+        """
+        抓取歷史Ticks，並智能處理交易日與夜盤的資料缺口問題。
+        1. 抓取最近一個完整交易日的TICK (api.ticks預設行為)
+        2. 判斷當前時間是否為夜盤時段 (15:00後)
+        3. 如果是夜盤，則額外抓取今天的TICK資料
+        4. 合併兩份資料，確保資料連續性
+        """
+        code = contract.target_code
+        
+        # 1. 抓取最近一個完整交易日的資料
+        ticks_main = self.api.ticks(contract)
+        df_main = pl.DataFrame(ticks_main.dict())
+
+        # 2. 判斷是否需要補抓夜盤資料
+        now = dt.datetime.now()
+        df_night = pl.DataFrame() # 預設為空的DataFrame
+
+        # 如果當前時間是下午3點後，且主要資料的最後一筆是在下午3點前，代表有夜盤缺口
+        if now.hour >= 15 and (df_main.is_empty() or df_main["ts"][-1] < now.replace(hour=15, minute=0, second=0, microsecond=0).timestamp() * 1e9):
+            print("偵測到夜盤時段，正在額外抓取今日TICK...")
+            ticks_night = self.api.ticks(contract, date=now.strftime("%Y-%m-%d"))
+            if ticks_night.ts:
+                df_night = pl.DataFrame(ticks_night.dict())
+
+        # 3. 合併資料
+        if not df_night.is_empty():
+            df = pl.concat([df_main, df_night]).unique(subset=["ts"], keep="first").sort("ts")
+        else:
+            df = df_main
+
+        if df.is_empty():
+            return pl.DataFrame()
+
+        # 4. 整理成標準格式
+        df = df.select(
             pl.from_epoch("ts", time_unit="ns").dt.cast_time_unit("us").alias("datetime"),
             pl.lit(code).alias("code"),
             pl.col("close").alias("price"),

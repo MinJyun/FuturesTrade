@@ -8,7 +8,7 @@ from shioaji.constant import (
 )
 import os
 
-from shioaji import TickFOPv1, Exchange
+import time
 from sj_trading.quote import QuoteManager
 
 
@@ -91,29 +91,129 @@ def testing_futures_ordering():
 
 
 def futures_quote():
-    # # 登入
+    """
+    持續接收期貨報價並顯示。
+    - 訂閱微台近一 (TMFR1)
+    - 首次印出回補的歷史資料
+    - 進入主迴圈，每秒檢查並印出新的Tick資料
+    - 使用 try...finally 來確保程式結束時能正確登出
+    """
     api = sj.Shioaji()
-    accounts = api.login(
+    api.login(
         api_key=os.environ["API_KEY"],
         secret_key=os.environ["SECRET_KEY"],
     )
-    # # 顯示所有可用的帳戶
-    # print(f"Available accounts: {accounts}")
-    # # api.activate_ca(
-    # #     ca_path=os.environ["CA_CERT_PATH"],
-    # #     ca_passwd=os.environ["CA_PASSWORD"],
-    # # )
 
-    # # 取得合約 使用台指期近月為例
-    # contract = api.Contracts.Futures["TXFR1"]
-    # api.quote.subscribe(
-    #     contract,
-    #     quote_type = sj.constant.QuoteType.Tick,
-    #     version = sj.constant.QuoteVersion.v1,
-    # )
-    # print(f"Contract: {contract}")
     quote_manager = QuoteManager(api)
-    quote_manager.subscribe_fop_tick(["TXFR1"], recover=True)
-    df_ticks = quote_manager.get_df_fop()
-    print(f"Ticks: {df_ticks}")
+    
+    try:
+        # 訂閱微台近一，並回補歷史資料
+        quote_manager.subscribe_fop_tick(["TMFR1"], recover=True)
+        
+        # 處理並印出第一次回補的資料
+        last_printed_rows = 0
+        df_ticks = quote_manager.get_df_fop()
+        if not df_ticks.is_empty():
+            print(f"歷史資料回補完成，共 {len(df_ticks)} 筆 ticks:")
+            print(df_ticks)
+            last_printed_rows = len(df_ticks)
+        
+        print("\n>>> 開始接收即時報價 (按 Ctrl+C 結束) <<<\n")
+
+        while True:
+            # 獲取最新的 DataFrame
+            df_ticks = quote_manager.get_df_fop()
+            
+            # 如果有新的資料進來，就印出新的部分
+            if len(df_ticks) > last_printed_rows:
+                new_ticks = df_ticks.slice(last_printed_rows)
+                print(new_ticks)
+                last_printed_rows = len(df_ticks)
+            
+            time.sleep(0.5) # 每0.5秒檢查一次
+
+    except KeyboardInterrupt:
+        print("\n程式被手動中斷。")
+    finally:
+        # 程式結束前，取消所有訂閱並登出
+        print("正在取消報價訂閱並登出...")
+        quote_manager.unsubscribe_all_fop_tick()
+        api.logout()
+        print("已成功登出。")
+
+
+def automated_trading_loop():
+    """
+    一個自動化交易的範例主迴圈。
+    - 持續接收期貨報價
+    - 計算5筆tick的移動平均線 (MA)
+    - 當價格由下往上突破MA時，下達買單
+    - 使用 try...finally 來確保程式結束時能正確登出
+    """
+    api = sj.Shioaji(simulation=True)
+    api.login(
+        api_key=os.environ["API_KEY"],
+        secret_key=os.environ["SECRET_KEY"],
+    )
+    api.activate_ca(
+        ca_path=os.environ["CA_CERT_PATH"],
+        ca_passwd=os.environ["CA_PASSWORD"],
+    )
+
+    quote_manager = QuoteManager(api)
+    # 訂閱台指期近月的即時報價，並回補當日歷史資料
+    quote_manager.subscribe_fop_tick(["TMFR1"], recover=True)
+
+    # 交易狀態旗標，確保只下單一次
+    order_placed = False
+    
+    try:
+        while not order_placed:
+            # 1. 獲取最新的報價 DataFrame
+            df_ticks = quote_manager.get_df_fop()
+
+            if len(df_ticks) < 5:
+                print(f"資料不足5筆，無法計算5MA。目前共 {len(df_ticks)} 筆。")
+                time.sleep(1)
+                continue
+
+            # 2. 定義並檢查交易條件
+            # 計算最近5筆tick的移動平均價
+            ma_5 = df_ticks["price"].tail(5).mean()
+            current_price = df_ticks["price"].tail(1).item()
+            previous_price = df_ticks["price"].tail(2).head(1).item()
+
+            print(f"時間: {df_ticks['datetime'].tail(1).item()} | 最新價: {current_price:.2f} | 5MA: {ma_5:.2f} | 上一筆價: {previous_price:.2f}")
+
+            # 交易條件：價格從下方突破5期均線
+            if previous_price < ma_5 and current_price > ma_5:
+                print("\n>>> 觸發下單條件：價格突破5期均線！ <<<")
+                
+                # 3. 執行下單
+                contract = api.Contracts.Futures["TXFR1"]
+                order = sj.order.FuturesOrder(
+                    action=Action.Buy,
+                    price=round(current_price, 2), # 以當前價格下限價單
+                    quantity=1,
+                    price_type=FuturesPriceType.LMT,
+                    order_type=OrderType.ROD,
+                    octype=FuturesOCType.Auto,
+                    account=api.futopt_account,
+                )
+                
+                trade = api.place_order(contract=contract, order=order)
+                print(f"\n下單成功: {trade}")
+                order_placed = True # 設定旗標，避免重複下單
+
+            # 4. 短暫休眠
+            time.sleep(1) # 每秒檢查一次
+
+    except KeyboardInterrupt:
+        print("\n程式被手動中斷。")
+    finally:
+        # 5. 程式結束前，取消所有訂閱並登出
+        print("正在取消報價訂閱並登出...")
+        quote_manager.unsubscribe_all_fop_tick()
+        api.logout()
+        print("已成功登出。")
 
