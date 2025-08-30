@@ -10,21 +10,11 @@ import os
 
 import time
 from sj_trading.quote import QuoteManager
+from sj_trading.login import login_shioaji
 
 
 def testing_stock_ordering():
-    # 測試環境登入
-    api = sj.Shioaji(simulation=True)
-    accounts = api.login(
-        api_key=os.environ["API_KEY"],
-        secret_key=os.environ["SECRET_KEY"],
-    )
-    # 顯示所有可用的帳戶
-    print(f"Available accounts: {accounts}")
-    api.activate_ca(
-        ca_path=os.environ["CA_CERT_PATH"],
-        ca_passwd=os.environ["CA_PASSWORD"],
-    )
+    api = login_shioaji(simulation=True)
 
     # 準備下單的 Contract
     # 使用 2890 永豐金為例
@@ -52,18 +42,7 @@ def testing_stock_ordering():
 
 
 def testing_futures_ordering():
-    # 測試環境登入
-    api = sj.Shioaji(simulation=True)
-    accounts = api.login(
-        api_key=os.environ["API_KEY"],
-        secret_key=os.environ["SECRET_KEY"],
-    )
-    # 顯示所有可用的帳戶
-    print(f"Available accounts: {accounts}")
-    api.activate_ca(
-        ca_path=os.environ["CA_CERT_PATH"],
-        ca_passwd=os.environ["CA_PASSWORD"],
-    )
+    api = login_shioaji(simulation=True)
 
     # 取得合約 使用台指期近月為例
     contract = api.Contracts.Futures["TXFR1"]
@@ -98,11 +77,7 @@ def futures_quote():
     - 進入主迴圈，每秒檢查並印出新的Tick資料
     - 使用 try...finally 來確保程式結束時能正確登出
     """
-    api = sj.Shioaji()
-    api.login(
-        api_key=os.environ["API_KEY"],
-        secret_key=os.environ["SECRET_KEY"],
-    )
+    api = login_shioaji()
 
     quote_manager = QuoteManager(api)
     
@@ -150,15 +125,7 @@ def automated_trading_loop():
     - 當價格由下往上突破MA時，下達買單
     - 使用 try...finally 來確保程式結束時能正確登出
     """
-    api = sj.Shioaji(simulation=True)
-    api.login(
-        api_key=os.environ["API_KEY"],
-        secret_key=os.environ["SECRET_KEY"],
-    )
-    api.activate_ca(
-        ca_path=os.environ["CA_CERT_PATH"],
-        ca_passwd=os.environ["CA_PASSWORD"],
-    )
+    api = login_shioaji(simulation=True)
 
     quote_manager = QuoteManager(api)
     # 訂閱微台近一的即時報價，並回補當日歷史資料
@@ -192,7 +159,7 @@ def automated_trading_loop():
 
                     # 交易條件：價格從下方突破5期均線
                     if previous_price < ma_5 and current_price > ma_5:
-                        print("\n>>> 觸發下單條件：價格突破5期均線！ <<<")
+                        print("\n>>> 觸發下單條件：價格突破5期均線！ <<<" )
 
                         # 3. 執行下單
                         contract = api.Contracts.Futures["TMFR1"]
@@ -219,6 +186,82 @@ def automated_trading_loop():
         # 5. 程式結束前，取消所有訂閱並登出
         print("正在取消報價訂閱並登出...")
         quote_manager.unsubscribe_all_fop_tick()
+        api.logout()
+        print("已成功登出。")
+
+
+def list_orders():
+    """
+    查詢並顯示所有委託單的狀態。
+    """
+    api = login_shioaji(simulation=True)
+
+    try:
+        # 更新所有委託單的狀態
+        api.update_status()
+        
+        # 獲取所有委託單
+        trades = api.list_trades()
+        
+        if not trades:
+            print("目前沒有任何委託單。")
+            return
+
+        print(f"找到 {len(trades)} 筆委託單：")
+        for trade in trades:
+            print(
+                f"  - ID: {trade.status.id} | "
+                f"合約: {trade.contract.code} | "
+                f"動作: {trade.order.action.value} | "
+                f"價格: {trade.order.price} | "
+                f"數量: {trade.order.quantity} | "
+                f"狀態: {trade.status.status.value} ({trade.status.status_code})"
+            )
+
+    except Exception as e:
+        print(f"查詢委託單時發生錯誤: {e}")
+    finally:
+        api.logout()
+        print("已成功登出。")
+
+
+def modify_order_price(order_id: str, new_price: float):
+    """
+    修改委託單的價格。
+
+    Args:
+        order_id (str): 委託單的 ID。
+        new_price (float): 新的委託價格。
+    """
+    api = login_shioaji(simulation=True)
+
+    try:
+        # 這裡需要一個方法來從 order_id 找到對應的 trade 物件
+        # Shioaji API 本身似乎沒有直接提供這個功能，
+        # 我們需要先 list_trades() 再從中尋找
+        api.update_status()
+        trades = api.list_trades()
+        trade_to_modify = None
+        for trade in trades:
+            if trade.status.id == order_id:
+                trade_to_modify = trade
+                break
+        
+        if not trade_to_modify:
+            print(f"找不到 ID 為 {order_id} 的委託單。")
+            return
+
+        # 執行改價
+        trade = api.update_order_price(trade=trade_to_modify, price=new_price)
+        print(f"已送出改價委託: {trade}")
+
+        # 更新並顯示最新狀態
+        api.update_status(trade=trade)
+        print(f"最新狀態: {trade.status}")
+
+    except Exception as e:
+        print(f"修改委託單時發生錯誤: {e}")
+    finally:
         api.logout()
         print("已成功登出。")
 
