@@ -10,6 +10,11 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "shioaji[speed]>=1.2.5",
     "typer>=0.9.0",
+    "pandas>=2.0.0",
+    "odfpy>=1.4.1",
+    "pyarrow>=14.0.0",
+    "lxml>=5.0.0",
+    "beautifulsoup4>=4.12.0",
 ]
 
 [project.scripts]

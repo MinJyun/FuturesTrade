@@ -1,0 +1,12 @@
+.DS_Store
+**/.DS_Store
+.env
+*.parquet
+__pycache__/
+.venv/
+shioaji.log
+.python-version
+*.ods
+*.html
+node_modules/
+.vscode/

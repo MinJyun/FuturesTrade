@@ -3,11 +3,61 @@ import time
 from typing import List
 from .core.client import ShioajiClient
 from .data.quote import QuoteManager
+from .data.info import InfoManager
 from .trading.order import OrderManager
 from .strategy.ma_crossover import MACrossoverStrategy
 from shioaji.constant import Action
 
 app = typer.Typer()
+
+@app.command()
+def reload_contracts(
+    type: str = typer.Option("all", help="all, future, or stock"),
+    file_path: str = typer.Option(None, help="Custom file path")
+):
+    """
+    Reload contract info.
+    Type: 'all' (default), 'future', 'stock'.
+    """
+    try:
+        im = InfoManager()
+        if type in ["all", "future"]:
+             im.reload_data(file_path)
+             print("Futures/Options info reloaded.")
+        
+        if type in ["all", "stock"]:
+             im.reload_stock_data(file_path)
+             print("Stock info reloaded.")
+             
+    except Exception as e:
+        print(f"Error reloading data: {e}")
+
+@app.command()
+def info(query: str):
+    """
+    Search for contract info (Futures & Stocks).
+    """
+    try:
+        im = InfoManager()
+        results = im.search(query)
+        
+        found = False
+        if "Futures" in results and not results["Futures"].is_empty():
+            print(f"\n[Futures Results] ({len(results['Futures'])})")
+            print(results["Futures"])
+            found = True
+            
+        if "Stocks" in results and not results["Stocks"].is_empty():
+            print(f"\n[Stock Results] ({len(results['Stocks'])})")
+            print(results["Stocks"])
+            found = True
+            
+        if not found:
+            print(f"No results found for '{query}'.")
+
+    except Exception as e:
+        print(f"Error searching data: {e}")
+
 
 @app.command()
 def quote(codes: List[str], type: str = "future"):
