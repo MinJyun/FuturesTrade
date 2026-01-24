@@ -10,3 +10,4 @@ shioaji.log
 *.html
 node_modules/
 .vscode/
+service_account.json

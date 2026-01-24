@@ -127,6 +127,19 @@ class InfoManager:
         self.STOCK_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         df.write_parquet(self.STOCK_CACHE_PATH)
         print(f"Stock data saved to {self.STOCK_CACHE_PATH}")
+        
+        # Update Google Sheet if configured
+        import os
+        from ..utils.gsheet import GoogleSheetClient
+        
+        sheet_url = os.getenv("GOOGLE_SHEET_URL")
+        sheet_tab = os.getenv("GOOGLE_SHEET_TAB")
+        
+        if sheet_url and sheet_tab:
+            print("Syncing to Google Sheet...")
+            gs = GoogleSheetClient()
+            gs.update_sheet(df.to_pandas(), sheet_url, sheet_tab)
+            
         return df
 
     def get_info(self) -> pl.DataFrame:
