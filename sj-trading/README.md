@@ -44,6 +44,12 @@ API_KEY=your_api_key
 SECRET_KEY=your_secret_key
 CA_CERT_PATH=path_to_your_ca_cert
 CA_PASSWORD=your_ca_password
+
+# Google Sheets Configuration
+GOOGLE_SHEET_URL=https://docs.google.com/spreadsheets/...
+GOOGLE_SHEET_TAB=股票代號
+GOOGLE_APPLICATION_CREDENTIALS=service_account.json
+
 ```
 
 ### 3. 執行指令
@@ -77,6 +83,28 @@ uv run sj-trading trade --strategy ma --symbol TMFR1
 ```bash
 uv run sj-trading test-order --type future
 ```
+
+#### 合約資訊管理
+
+更新股票期貨與現貨資料（支援 Google Sheet 同步）：
+
+```bash
+# 更新所有資料
+uv run sj-trading reload-contracts
+
+# 僅更新股票資料 (HTML) 並同步至 Google Sheet
+uv run sj-trading reload-contracts --type stock
+```
+
+_(需先將 `file/2_stockinfo.ods` 與 `file/C_public.html` 放置於 `file/` 目錄下)_
+
+查詢合約資訊 (自動同時搜尋期貨與現貨)：
+
+```bash
+uv run sj-trading info 2330
+```
+
+_(自動過濾權證資料，並標示期貨/微型期貨類型)_
 
 ## 開發指南
 

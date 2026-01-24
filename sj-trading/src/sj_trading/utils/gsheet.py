@@ -52,5 +52,20 @@ class GoogleSheetClient:
             ws.update(data)
             print("Google Sheet Updated Successfully!")
             
+        except gspread.exceptions.APIError as e:
+            error_details = e.response.json().get('error', {})
+            code = error_details.get('code')
+            message = error_details.get('message')
+            status = error_details.get('status')
+            
+            print(f"❌ Google Sheet API Error!")
+            print(f"   Status Code: {code} ({status})")
+            print(f"   Message: {message}")
+            
+            if code == 429:
+                 print("   ⚠️ Quota Exceeded. You might be sending requests too fast.")
+            elif code == 403:
+                 print("   ⚠️ Permission Denied. Check if the service account has edit access.")
+                 
         except Exception as e:
-            print(f"Error updating Google Sheet: {e}")
+            print(f"❌ specific Error updating Google Sheet: {e}")
