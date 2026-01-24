@@ -9,18 +9,11 @@ dependencies = [
     "polars>=1.9.0",
     "python-dotenv>=1.0.1",
     "shioaji[speed]>=1.2.5",
+    "typer>=0.9.0",
 ]
 
 [project.scripts]
-hello = "sj_trading:hello"
-main = "sj_trading:main"
-version = "sj_trading:show_version"
-stock_testing = "sj_trading.testing_flow:testing_stock_ordering"
-futures_testing = "sj_trading.testing_flow:testing_futures_ordering"
-futures_quote = "sj_trading.testing_flow:futures_quote"
-auto_trading = "sj_trading.testing_flow:automated_trading_loop"
-list_orders = "sj_trading.testing_flow:list_orders"
-modify_order = "sj_trading.testing_flow:modify_order_price"
+sj-trading = "sj_trading.main:app"
 
 [build-system]
 requires = ["hatchling"]

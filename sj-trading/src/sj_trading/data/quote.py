@@ -1,7 +1,6 @@
 import shioaji as sj
 from typing import List, Set
 import polars as pl
-# import polars_talib as plta
 from shioaji.contracts import BaseContract
 import datetime as dt
 
@@ -44,10 +43,6 @@ class QuoteManager:
     def fetch_ticks(self, contract: BaseContract) -> pl.DataFrame:
         """
         抓取歷史Ticks，並智能處理交易日與夜盤的資料缺口問題。
-        1. 抓取最近一個完整交易日的TICK (api.ticks預設行為)
-        2. 判斷當前時間是否為夜盤時段 (15:00後)
-        3. 如果是夜盤，則額外抓取今天的TICK資料
-        4. 合併兩份資料，確保資料連續性
         """
         code = contract.target_code
         
