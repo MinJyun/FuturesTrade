@@ -69,3 +69,36 @@ class GoogleSheetClient:
                  
         except Exception as e:
             print(f"❌ specific Error updating Google Sheet: {e}")
+
+    def add_trading_record(self, record: list, url: str, worksheet_name: str):
+        """
+        Add a trading record to the sheet.
+        Finds the first empty row in Column A (to preserve formulas in later columns)
+        and writes data to A:G.
+        """
+        if not self.gc:
+            return
+
+        try:
+            sh = self.gc.open_by_url(url)
+            try:
+                ws = sh.worksheet(worksheet_name)
+            except gspread.WorksheetNotFound:
+                ws = sh.add_worksheet(title=worksheet_name, rows=100, cols=20)
+
+            # Logic: Find first empty row in Col A
+            col_a_values = ws.col_values(1) # List of values in Col A
+            next_row = len(col_a_values) + 1
+            
+            # Record length check (should be 7)
+            # data range: A{row}:G{row}
+            # G is 7th letter
+            end_col_letter = chr(ord('A') + len(record) - 1)
+            range_name = f"A{next_row}:{end_col_letter}{next_row}"
+            
+            print(f"Logging record to {range_name}...")
+            ws.update(range_name, [record], value_input_option='USER_ENTERED')
+            print("Trading record logged successfully!")
+            
+        except Exception as e:
+            print(f"❌ Error logging trading record: {e}")
