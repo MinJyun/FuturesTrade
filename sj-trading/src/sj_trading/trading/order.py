@@ -82,3 +82,38 @@ class OrderManager:
         self.api.update_order_price(trade=target_trade, price=new_price)
         self.api.update_status(trade=target_trade)
         return target_trade
+
+    def cancel_order(self, order_id: str):
+        self.update_status()
+        trades = self.api.list_trades()
+        target_trade = next((t for t in trades if t.status.id == order_id), None)
+        
+        if not target_trade:
+            # If not found in active trades, it might be already filled or cancelled.
+            # We assume if not found, we can't cancel it.
+            print(f"Warning: Order ID {order_id} not found for cancellation.")
+            return
+
+        self.api.update_status(trade=target_trade, action=Action.Cancel)
+        print(f"Order {order_id} cancellation sent.")
+
+    def get_futures_position(self, code: str) -> Optional[dict]:
+        """
+        Get current futures position for a specific code.
+        Returns dict with 'quantity' (positive for long, negative for short) and 'price'.
+        Returns None if no position found.
+        """
+        # Note: Shioaji implementation details for list_positions might VARY by version.
+        # Standard approach: api.list_positions(account)
+        self.api.update_status() # Ensure account data is synced? often needed for trades, maybe positions too.
+        positions = self.api.list_positions(self.api.futopt_account)
+        
+        target = next((p for p in positions if p.code == code), None)
+        if not target:
+            return None
+            
+        return {
+            "quantity": float(target.quantity), # Shioaji usually returns signed quantity or direction
+            "price": float(target.price),
+            "direction": target.direction # Action.Buy or Action.Sell usually
+        }

@@ -50,6 +50,11 @@ GOOGLE_SHEET_URL=https://docs.google.com/spreadsheets/...
 GOOGLE_SHEET_TAB=股票代號
 GOOGLE_APPLICATION_CREDENTIALS=service_account.json
 
+# Telegram Configuration (Optional)
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+
+
 ```
 
 ### 3. 執行指令
@@ -105,6 +110,22 @@ uv run sj-trading info 2330
 ```
 
 _(自動過濾權證資料，並標示期貨/微型期貨類型)_
+
+#### 策略監控 (OCO 停損停利)
+
+針對現有持倉進行自動化保護與獲利了結。
+
+```bash
+# 做多監控範例 (Long)
+uv run sj-trading monitor-strategy --symbol TMFR1 --qty 1 --sl 22900 --tp 23100 --direction long
+
+# 做空監控範例 (Short)
+uv run sj-trading monitor-strategy --symbol TMFR1 --qty 1 --sl 23200 --tp 22800 --direction short
+```
+
+- **安全檢查機制**：啟動前會自動確認帳戶內是否有足夠數量的持倉且方向一致，否則拒絕執行。
+- **OCO 邏輯**：啟動後立即掛出「限價停利單」，並在背景監控價格。若觸發停損價格，會自動「撤除停利單」並改下「市價停損單」。
+- **即時通知**：所有狀態變更（觸發、下單、成交）均會即時顯示於終端機。
 
 ## 開發指南
 

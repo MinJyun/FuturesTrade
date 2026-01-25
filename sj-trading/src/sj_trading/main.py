@@ -60,6 +60,37 @@ def info(query: str):
 
 
 @app.command()
+def monitor_strategy(
+    symbol: str, 
+    qty: int, 
+    sl: float, 
+    tp: float, 
+    direction: str = typer.Option("long", help="Position direction: 'long' or 'short'")
+):
+    """
+    Start Stop Loss/Take Profit Strategy (OCO).
+    1. Places TP Limit Order immediately.
+    2. Monitors price.
+    3. If SL hit -> Cancels TP -> Places SL Market Order.
+    """
+    client = ShioajiClient() 
+    # Initialize APIs
+    qm = QuoteManager(client.api)
+    om = OrderManager(client.api)
+    
+    from .strategy.stop_loss import StopLossStrategy
+    strategy = StopLossStrategy(qm, om, symbol, qty, sl, tp, direction)
+    
+    # Bind strategy to receive callbacks
+    client.bind_strategy(strategy)
+    
+    try:
+        strategy.run() # This blocks
+    except KeyboardInterrupt:
+        strategy.stop()
+        print("Strategy stopped.")
+
+@app.command()
 def quote(codes: List[str], type: str = "future"):
     """
     Subscribe and print quotes for given codes.

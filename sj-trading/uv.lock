@@ -1268,6 +1268,7 @@ dependencies = [
     { name = "polars-talib" },
     { name = "pyarrow" },
     { name = "python-dotenv" },
+    { name = "requests" },
     { name = "shioaji", extra = ["speed"] },
     { name = "typer" },
 ]
@@ -1289,6 +1290,7 @@ requires-dist = [
     { name = "polars-talib", specifier = ">=0.1.3" },
     { name = "pyarrow", specifier = ">=14.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "requests", specifier = ">=2.31.0" },
     { name = "shioaji", extras = ["speed"], specifier = ">=1.2.5" },
     { name = "typer", specifier = ">=0.9.0" },
 ]
