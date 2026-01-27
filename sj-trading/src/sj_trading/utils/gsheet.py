@@ -2,7 +2,7 @@ import gspread
 import pandas as pd
 import os
 from pathlib import Path
-from shioaji import Shioaji
+
 
 class GoogleSheetClient:
     def __init__(self):

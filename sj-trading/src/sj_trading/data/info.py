@@ -7,7 +7,8 @@ class InfoManager:
     DATA_PATH = Path("file/2_stockinfo.ods")
     CACHE_PATH = Path("file/contract_info.parquet")
     
-    STOCK_DATA_PATH = Path("file/C_public.html")
+    STOCK_DATA_PATH = Path("file/C_public.html")  # TWSE listed stocks
+    OTC_STOCK_DATA_PATH = Path("file/C_public_4.html")  # OTC stocks
     STOCK_CACHE_PATH = Path("file/stock_info.parquet")
 
     def __init__(self):
@@ -64,26 +65,60 @@ class InfoManager:
         print(f"Futures data saved to {self.CACHE_PATH}")
         return df
 
-    def reload_stock_data(self, file_path: Optional[str] = None) -> pl.DataFrame:
-        """Reload Stock/ETF info (HTML)"""
-        path = file_path if file_path else self.STOCK_DATA_PATH
-        if not Path(path).exists():
-            raise FileNotFoundError(f"File not found: {path}")
-
+    def _parse_stock_html(self, path: Path) -> Optional[pd.DataFrame]:
+        """Parse a single stock HTML file and return a pandas DataFrame.
+        
+        Returns None if the file doesn't exist.
+        """
+        if not path.exists():
+            print(f"File not found, skipping: {path}")
+            return None
+            
         print(f"Reading HTML file: {path}...")
         
-        # Assuming the first table is the one we want. 
-        # C_public.html usually uses Big5 or CP950 encoding.
+        # C_public.html and C_public_4.html usually use Big5 or CP950 encoding.
         try:
-            dfs = pd.read_html(path, encoding='cp950', header=0)
+            dfs = pd.read_html(str(path), encoding='cp950', header=0)
         except:
-             # Fallback to big5 or utf-8 if needed, but usually CP950 for TW stock data files
-            dfs = pd.read_html(path, encoding='big5', header=0)
+            # Fallback to big5 or utf-8 if needed
+            dfs = pd.read_html(str(path), encoding='big5', header=0)
             
         if not dfs:
-            raise ValueError("No tables found in HTML file.")
+            print(f"No tables found in {path}")
+            return None
             
-        df_pd = dfs[0]
+        return dfs[0]
+
+    def reload_stock_data(self, file_path: Optional[str] = None) -> pl.DataFrame:
+        """Reload Stock/ETF info from HTML files.
+        
+        Parses both TWSE listed stocks (C_public.html) and OTC stocks (C_public_4.html),
+        combines them, filters out warrants, and syncs to Google Sheet if configured.
+        
+        Args:
+            file_path: Optional path to override the default TWSE file. If provided,
+                       only this file will be parsed (OTC file will be skipped).
+        """
+        dfs_to_combine = []
+        
+        if file_path:
+            # Custom file path provided, parse only that file
+            df_pd = self._parse_stock_html(Path(file_path))
+            if df_pd is not None:
+                dfs_to_combine.append(df_pd)
+        else:
+            # Parse both TWSE and OTC files
+            for stock_path in [self.STOCK_DATA_PATH, self.OTC_STOCK_DATA_PATH]:
+                df_pd = self._parse_stock_html(stock_path)
+                if df_pd is not None:
+                    dfs_to_combine.append(df_pd)
+        
+        if not dfs_to_combine:
+            raise ValueError("No stock data files found or parsed successfully.")
+        
+        # Combine all dataframes
+        df_pd = pd.concat(dfs_to_combine, ignore_index=True)
+        print(f"Combined {len(dfs_to_combine)} file(s), total rows: {len(df_pd)}")
         
         print("Pandas DF Info (Stock):")
         print(df_pd.info())
