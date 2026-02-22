@@ -82,10 +82,10 @@ class QuoteManager:
     # K-bar aggregation
     # ─────────────────────────────────────────────────────────────
     
-    def get_df_stk_kbar(self, unit: str = "1m", exprs: List[pl.Expr] = []) -> pl.DataFrame:
+    def get_df_stk_kbar(self, unit: str = "1m", exprs: List[pl.Expr] | None = None) -> pl.DataFrame:
         """Aggregate stock ticks into K-bars."""
         df = self.get_df_stk()
-        return self._aggregate_kbar(df, unit, exprs)
+        return self._aggregate_kbar(df, unit, exprs or [])
     
     def _aggregate_kbar(self, df: pl.DataFrame, unit: str, exprs: List[pl.Expr]) -> pl.DataFrame:
         """Aggregate tick data into OHLCV K-bars."""

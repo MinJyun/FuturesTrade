@@ -1,7 +1,7 @@
 import pandas as pd
 import polars as pl
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, Dict
 
 class InfoManager:
     DATA_PATH = Path("file/2_stockinfo.ods")
@@ -79,7 +79,7 @@ class InfoManager:
         # C_public.html and C_public_4.html usually use Big5 or CP950 encoding.
         try:
             dfs = pd.read_html(str(path), encoding='cp950', header=0)
-        except:
+        except (UnicodeDecodeError, LookupError):
             # Fallback to big5 or utf-8 if needed
             dfs = pd.read_html(str(path), encoding='big5', header=0)
             

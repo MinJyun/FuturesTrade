@@ -94,7 +94,7 @@ class OrderManager:
             print(f"Warning: Order ID {order_id} not found for cancellation.")
             return
 
-        self.api.update_status(trade=target_trade, action=Action.Cancel)
+        self.api.cancel_order(trade=target_trade)
         print(f"Order {order_id} cancellation sent.")
 
     def get_futures_position(self, code: str) -> Optional[dict]:

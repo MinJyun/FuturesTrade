@@ -4,11 +4,18 @@ from .config import Config
 class ShioajiClient:
     _instance = None
     _api = None
+    _simulation = None  # Track the mode
 
     def __new__(cls, simulation: bool = True):
         if cls._instance is None:
             cls._instance = super(ShioajiClient, cls).__new__(cls)
             cls._instance._initialize(simulation)
+            cls._simulation = simulation
+        elif cls._simulation != simulation:
+            raise RuntimeError(
+                f"ShioajiClient already initialized with simulation={cls._simulation}. "
+                f"Cannot reinitialize with simulation={simulation}."
+            )
         return cls._instance
 
     def _initialize(self, simulation: bool):

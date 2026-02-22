@@ -68,7 +68,7 @@ class GoogleSheetClient:
                  print("   ⚠️ Permission Denied. Check if the service account has edit access.")
                  
         except Exception as e:
-            print(f"❌ specific Error updating Google Sheet: {e}")
+            print(f"❌ Unexpected error updating Google Sheet: {e}")
 
     def add_trading_record(self, record: list, url: str, worksheet_name: str):
         """

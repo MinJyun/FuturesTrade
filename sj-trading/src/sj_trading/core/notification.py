@@ -1,6 +1,5 @@
 import os
 import requests
-from typing import Optional
 from datetime import datetime
 
 class NotificationManager:

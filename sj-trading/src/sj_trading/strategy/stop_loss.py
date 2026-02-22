@@ -93,7 +93,7 @@ class StopLossStrategy(BaseStrategy):
             return
 
         # 2. Subscribe and Monitor
-        self.quote_manager.subscribe([self.symbol])
+        self.quote_manager.subscribe_fop_tick([self.symbol])
         print(f"Listening for ticks on {self.symbol}...")
         
         try:
