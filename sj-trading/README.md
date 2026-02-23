@@ -94,7 +94,10 @@ uv run sj-trading order TMFR1 --action buy --price 33800 --qty 1 --type future -
 # 2. 查詢當日有效委託單與成交紀錄
 uv run sj-trading list-orders --sim
 
-# 3. 取消委託單 (單一或全部)
+# 3. 修改委託單價格
+uv run sj-trading update <ORDER_ID> 33900 --sim
+
+# 4. 取消委託單 (單一或全部)
 uv run sj-trading cancel --id <ORDER_ID> --sim
 uv run sj-trading cancel --all --sim
 ```
@@ -140,8 +143,27 @@ uv run sj-trading monitor-strategy --symbol TMFR1 --qty 1 --sl 23200 --tp 22800 
 ```
 
 - **安全檢查機制**：啟動前會自動確認帳戶內是否有足夠數量的持倉且方向一致，否則拒絕執行。
-- **OCO 邏輯**：啟動後立即掛出「限價停利單」，並在背景監控價格。若觸發停損價格，會自動「撤除停利單」並改下「市價停損單」。
-- **即時通知**：所有狀態變更（觸發、下單、成交）均會即時顯示於終端機。
+
+#### Telegram 遠端下單機器人
+
+啟動背景監聽程式，直接從 Telegram 聊天室控制專案：
+
+```bash
+# 啟動機器人 (真倉請加 --no-sim)
+uv run sj-trading bot --sim
+```
+
+**支援的 Telegram 指令：**
+
+- `/help` - 顯示指令列表
+- `/order <code> <buy/sell> <price> <qty>` - 下限價單 (例如 `/order TMFR1 buy 33800 1`)
+- `/update <id> <new_price>` - 修改委託單價格 (例如 `/update ee3aefe6 33900`)
+- `/list` - 列出當日有效委託與成交單
+- `/cancel <id>` - 取消指定委託單
+- `/cancelall` - 一鍵取消所有委託單
+- `/info <query>` - 搜尋合約代碼
+
+_(注意：機器人具有安全機制，只會回應 `.env` 中設定的 `TELEGRAM_CHAT_ID` 的訊息)_
 
 ## 開發指南
 

@@ -227,9 +227,51 @@ def list_orders(sim: bool = typer.Option(True, help="Set --no-sim for real tradi
             
         print(f"\n=== Active Trades/Orders ===")
         for t in trades:
-            print(f"ID: {t.status.id} | {t.contract.code} | {t.order.action.name} {t.order.quantity} @ {t.order.price} | Status: {t.status.status.name}")
+            current_price = getattr(t.status, "modified_price", t.order.price)
+            if current_price == 0:
+                current_price = t.order.price
+            print(f"ID: {t.status.id} | {t.contract.code} | {t.order.action.name} {t.order.quantity} @ {current_price} | Status: {t.status.status.name}")
     except Exception as e:
         print(f"Error fetching trades: {e}")
+
+@app.command()
+def update(
+    order_id: str = typer.Argument(..., help="Order ID to update"),
+    price: float = typer.Argument(..., help="New price"),
+    sim: bool = typer.Option(True, help="Set --no-sim for real trading")
+):
+    """
+    Update the price of an active order.
+    """
+    client = ShioajiClient(simulation=sim)
+    om = OrderManager(client.api)
+    
+    print(f"Environment: {'SIMULATED' if sim else 'REAL'}")
+    print(f"Updating Order ID: {order_id} to price: {price}...")
+    
+    try:
+        om.update_order_price(order_id, price)
+        print("Update request sent successfully.")
+    except Exception as e:
+        print(f"Failed to update order: {e}")
+
+@app.command()
+def bot(sim: bool = typer.Option(True, help="Set --no-sim for real trading")):
+    """
+    Start the Telegram Bot to listen for trading commands.
+    """
+    client = ShioajiClient(simulation=sim)
+    om = OrderManager(client.api)
+    
+    from .core.telegram_bot import TelegramBotManager
+    tg_bot = TelegramBotManager(order_manager=om, simulation=sim)
+    
+    try:
+        tg_bot.run()
+    except KeyboardInterrupt:
+        print("\nBot stopped by user.")
+    except Exception as e:
+        print(f"Bot exited with error: {e}")
 
 @app.command()
 def cancel(
