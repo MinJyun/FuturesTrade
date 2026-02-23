@@ -97,6 +97,26 @@ class OrderManager:
         self.api.cancel_order(trade=target_trade)
         print(f"Order {order_id} cancellation sent.")
 
+    def cancel_all_orders(self) -> int:
+        """Cancel all active (pending) orders. Returns number of cancelled orders."""
+        self.update_status()
+        trades = self.api.list_trades()
+        cancel_count = 0
+        
+        # Pending Statuses: PendingSubmit, PreSubmitted, Submitted
+        # Shioaji status names e.g. Submitted, PendingSubmit
+        for t in trades:
+            status_name = t.status.status.name
+            if status_name in ["PendingSubmit", "PreSubmitted", "Submitted", "PartFilled"]:
+                try:
+                    self.api.cancel_order(trade=t)
+                    print(f"Cancelled Order {t.status.id} ({t.contract.code} {t.order.action.name} {t.order.quantity})")
+                    cancel_count += 1
+                except Exception as e:
+                    print(f"Failed to cancel {t.status.id}: {e}")
+                    
+        return cancel_count
+
     def get_futures_position(self, code: str) -> Optional[dict]:
         """
         Get current futures position for a specific code.

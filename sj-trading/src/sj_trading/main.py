@@ -176,6 +176,93 @@ def test_order(type: str = "future"):
             print(f"Error: {e}")
 
 @app.command()
+def order(
+    code: str,
+    action: str = typer.Option(..., help="Buy or Sell"),
+    price: float = typer.Option(..., help="Order price"),
+    qty: int = typer.Option(1, help="Quantity"),
+    type: str = typer.Option("future", help="'future' or 'stock'"),
+    sim: bool = typer.Option(True, help="Set --no-sim for real trading")
+):
+    """
+    Place a real or simulated limit order.
+    """
+    client = ShioajiClient(simulation=sim)
+    om = OrderManager(client.api)
+    
+    act_enum = Action.Buy if action.lower() == "buy" else Action.Sell
+    msg_type = "SIMULATED" if sim else "REAL"
+    print(f"Placing {msg_type} order: {act_enum.name} {qty} {code} @ {price}")
+    
+    try:
+        if type.lower() == "future":
+            from shioaji.constant import FuturesPriceType
+            trade = om.place_futures_order(
+                code=code, action=act_enum, price=price, quantity=qty, price_type=FuturesPriceType.LMT
+            )
+        else:
+            from shioaji.constant import StockPriceType
+            trade = om.place_stock_order(
+                code=code, action=act_enum, price=price, quantity=qty, price_type=StockPriceType.LMT
+            )
+        print(f"Order Placed Successfully! ID: {trade.status.id}")
+        print(f"Status: {trade.status.status.name}")
+    except Exception as e:
+        print(f"Failed to place order: {e}")
+
+@app.command("list-orders")
+def list_orders(sim: bool = typer.Option(True, help="Set --no-sim for real trading")):
+    """
+    List today's trades and orders.
+    """
+    client = ShioajiClient(simulation=sim)
+    om = OrderManager(client.api)
+    
+    print(f"Fetching {'SIMULATED' if sim else 'REAL'} orders...")
+    try:
+        trades = om.list_trades()
+        if not trades:
+            print("No trades/orders found today.")
+            return
+            
+        print(f"\n=== Active Trades/Orders ===")
+        for t in trades:
+            print(f"ID: {t.status.id} | {t.contract.code} | {t.order.action.name} {t.order.quantity} @ {t.order.price} | Status: {t.status.status.name}")
+    except Exception as e:
+        print(f"Error fetching trades: {e}")
+
+@app.command()
+def cancel(
+    order_id: str = typer.Option(None, "--id", help="Specific Order ID to cancel"),
+    all: bool = typer.Option(False, "--all", help="Cancel ALL active orders"),
+    sim: bool = typer.Option(True, help="Set --no-sim for real trading")
+):
+    """
+    Cancel an order by ID or all active orders.
+    """
+    if not order_id and not all:
+        print("Please specify an order ID (--id) or use --all to cancel all active orders.")
+        return
+        
+    client = ShioajiClient(simulation=sim)
+    om = OrderManager(client.api)
+    
+    print(f"Environment: {'SIMULATED' if sim else 'REAL'}")
+    
+    try:
+        if all:
+            print("Cancelling ALL active orders...")
+            count = om.cancel_all_orders()
+            print(f"Sent cancellation requests for {count} order(s).")
+        else:
+            print(f"Cancelling Order ID: {order_id}...")
+            om.cancel_order(order_id)
+            # update_status is called inside cancel_order
+            print("Cancellation request sent.")
+    except Exception as e:
+        print(f"Failed to cancel order(s): {e}")
+
+@app.command()
 def version():
     import shioaji
     print(f"Shioaji Version: {shioaji.__version__}")

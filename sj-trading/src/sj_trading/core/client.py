@@ -28,10 +28,16 @@ class ShioajiClient:
         print(f"Shioaji logged in (Simulation: {simulation})")
         if not simulation:
              if Config.CA_CERT_PATH and Config.CA_PASSWORD:
+                # Use list_accounts to safely get the person_id 
+                # instead of relying on stock_account which might be None
+                accounts = self._api.list_accounts()
+                if not accounts:
+                    raise RuntimeError("No accounts found after Shioaji login.")
+                
                 self._api.activate_ca(
                     ca_path=Config.CA_CERT_PATH,
                     ca_passwd=Config.CA_PASSWORD,
-                    person_id=self._api.stock_account.person_id,
+                    person_id=accounts[0].person_id,
                 )
         
 

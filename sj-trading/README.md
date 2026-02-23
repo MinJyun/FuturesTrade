@@ -83,7 +83,23 @@ uv run sj-trading quote TMFR1
 uv run sj-trading trade --strategy ma --symbol TMFR1
 ```
 
-#### 測試下單 (模擬環境)
+#### 下單與委託單管理 (手動/CLI)
+
+可透過 CLI 直接進行掛單、查詢與刪單（預設為模擬環境，真倉請加上 `--no-sim`）。
+
+```bash
+# 1. 掛單 (例如: 買進一口微型台指限價 33800)
+uv run sj-trading order TMFR1 --action buy --price 33800 --qty 1 --type future --sim
+
+# 2. 查詢當日有效委託單與成交紀錄
+uv run sj-trading list-orders --sim
+
+# 3. 取消委託單 (單一或全部)
+uv run sj-trading cancel --id <ORDER_ID> --sim
+uv run sj-trading cancel --all --sim
+```
+
+#### 測試下單 (快速模擬體驗)
 
 ```bash
 uv run sj-trading test-order --type future
