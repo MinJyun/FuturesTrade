@@ -22,6 +22,9 @@ ENV PATH="/root/.local/bin:${PATH}"
 COPY pyproject.toml README.md ./
 # COPY uv.lock . # Uncomment if you use uv.lock to freeze versions
 
+# Copy the source code because hatchling needs it to build the package during install
+COPY src ./src
+
 # Install dependencies using uv
 RUN uv pip install -e .
 
