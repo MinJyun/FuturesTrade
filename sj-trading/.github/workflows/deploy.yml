@@ -1,0 +1,28 @@
+name: Deploy to GCP VM
+
+on:
+  push:
+    branches:
+      - main # 每次 push 到 main 分支時觸發自動部署
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Assuming you clone your repo into ~/sj-trading on the VM
+          script: |
+            cd ~/sj-trading
+            git pull origin main
+
+            # Use docker compose to rebuild and restart the background bot
+            sudo docker compose up -d --build

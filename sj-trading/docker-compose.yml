@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: sj-trading-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Mount the configuration/data files directory so data persists across rebuilds
+      - ./file:/app/file
