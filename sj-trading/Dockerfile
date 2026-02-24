@@ -18,8 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Copy pyproject.toml and uv.lock (if it exists) to install dependencies first (caching layer)
-COPY pyproject.toml .
+# Copy pyproject.toml and README.md (required by hatchling metadata) to install dependencies first (caching layer)
+COPY pyproject.toml README.md ./
 # COPY uv.lock . # Uncomment if you use uv.lock to freeze versions
 
 # Install dependencies using uv
