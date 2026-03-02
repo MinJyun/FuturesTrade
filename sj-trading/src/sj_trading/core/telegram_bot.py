@@ -190,11 +190,26 @@ class TelegramBotManager:
         
         act_enum = Action.Buy if action_str == "buy" else Action.Sell
         
-        # Check if Future or Stock via InfoManager
+        # Check if Future or Stock via InfoManager or Shioaji API Contracts
         is_future = False
-        res = self.im.search(code)
-        if "Futures" in res and not res["Futures"].is_empty():
-            is_future = True
+        
+        # 1. Check if the exact code exists in Shioaji Futures Contracts (e.g. TMFR1, MXF03)
+        try:
+            future_contract = getattr(self.om.api.Contracts.Futures, code, None)
+            if not future_contract:
+                # Fallback to dictionary-like access if getattr fails
+                future_contract = self.om.api.Contracts.Futures.get(code) if hasattr(self.om.api.Contracts.Futures, 'get') else self.om.api.Contracts.Futures[code]
+                
+            if future_contract:
+                is_future = True
+        except Exception:
+            pass
+            
+        # 2. Check if the base code exists in InfoManager (e.g. if partial matching is needed)
+        if not is_future:
+            res = self.im.search(code)
+            if "Futures" in res and not res["Futures"].is_empty():
+                is_future = True
             
         symbol_type = "Future" if is_future else "Stock"
         
