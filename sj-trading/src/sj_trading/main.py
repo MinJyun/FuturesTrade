@@ -304,6 +304,62 @@ def cancel(
     except Exception as e:
         print(f"Failed to cancel order(s): {e}")
 
+@app.command("record-trades")
+def record_trades(
+    start: str = typer.Argument(None, help="Start date YYYY-MM-DD (default: 6 days before end)"),
+    end: str = typer.Argument(None, help="End date YYYY-MM-DD (default: same as start, or today if start is omitted)"),
+    write: bool = typer.Option(False, "--write", help="Append to Google Sheet (default: preview only)"),
+    sim: bool = typer.Option(True, help="Set --no-sim for real trading")
+):
+    """
+    Record closed futures trades (incl. manual ones) to the trade record sheet.
+    Dates are trade dates: night session trades belong to the next trading day
+    (Friday night -> Monday). With no dates, covers the last 7 days up to today,
+    so a weekly run on Monday after the day session covers Tue..Mon without gaps.
+    Rows already in the sheet are skipped.
+    """
+    import os
+    from datetime import date, timedelta
+    from .utils.gsheet import GoogleSheetClient, record_key, to_sheet_record
+
+    if start is None:
+        end_d = date.fromisoformat(end) if end else date.today()
+        start, end = (end_d - timedelta(days=6)).isoformat(), end_d.isoformat()
+    end = end or start
+
+    url = os.getenv("GOOGLE_SHEET_URL")
+    tab = os.getenv("GOOGLE_SHEET_TAB_RECORDS")
+    if not url or not tab:
+        print("GOOGLE_SHEET_URL / GOOGLE_SHEET_TAB_RECORDS not set.")
+        raise typer.Exit(1)
+
+    client = ShioajiClient(simulation=sim)
+    om = OrderManager(client.api)
+
+    print(f"Closed futures trades {start} ~ {end}")
+    records = om.list_futures_closed_records(start, end)
+    if not records:
+        print("No closed futures trades found.")
+        return
+
+    gs = GoogleSheetClient()
+    existing = gs.get_record_keys(url, tab)
+    new_records = []
+    print("平倉日 | 下單日 | 產品 | 口數 | 方向 | 買點數 | 賣點數")
+    for r in records:
+        dup = record_key(r) in existing
+        print(" | ".join(str(v) for v in to_sheet_record(r)) + ("  (already in sheet, skip)" if dup else ""))
+        if not dup:
+            new_records.append(r)
+
+    if not write:
+        print(f"\nPreview only ({len(new_records)} new rows). Add --write to append to Google Sheet.")
+        return
+
+    for r in new_records:
+        gs.add_trading_record(r, url, tab)
+    print(f"Wrote {len(new_records)} new rows.")
+
 @app.command()
 def version():
     import shioaji

@@ -117,6 +117,34 @@ class OrderManager:
                     
         return cancel_count
 
+    def list_futures_closed_records(self, begin_date: str, end_date: str) -> List[list]:
+        """
+        Closed futures trades in [begin_date, end_date] (YYYY-MM-DD), regardless of where they were placed.
+        Row format matches the trade record sheet: 平倉日, 下單日, 產品, 口數, 方向, 買點數, 賣點數,
+        followed by round-trip fee and tax.
+        """
+        def fmt(d: str) -> str:
+            d = d.replace("-", "").replace("/", "")
+            return f"{d[:4]}/{d[4:6]}/{d[6:8]}"
+
+        account = self.api.futopt_account
+        records = []
+        for pl in self.api.list_profit_loss(account, begin_date, end_date):
+            for d in self.api.list_profit_loss_detail(account, pl.id):
+                is_long = d.direction == Action.Buy
+                records.append([
+                    fmt(pl.date),                                # 平倉日
+                    fmt(d.date),                                 # 下單日
+                    d.code,                                      # 產品
+                    d.quantity,                                  # 口數
+                    "多" if is_long else "空",                   # 方向
+                    d.entry_price if is_long else d.cover_price, # 買點數
+                    d.cover_price if is_long else d.entry_price, # 賣點數
+                    d.fee,                                       # 手續費 (round trip)
+                    d.tax,                                       # 交易稅 (round trip)
+                ])
+        return records
+
     def get_futures_position(self, code: str) -> Optional[dict]:
         """
         Get current futures position for a specific code.
