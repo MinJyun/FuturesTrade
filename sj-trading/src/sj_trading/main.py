@@ -285,6 +285,7 @@ def list_orders(sim: bool = typer.Option(True, help="Set --no-sim for real tradi
     
     print(f"Fetching {'SIMULATED' if sim else 'REAL'} orders...")
     try:
+        om.update_status()
         trades = om.list_trades()
         if not trades:
             print("No trades/orders found today.")
