@@ -56,8 +56,7 @@ class QuoteManager:
     
     def _get_df(self, market_type: MarketType) -> pl.DataFrame:
         """Get accumulated tick DataFrame for the specified market."""
-        ticks = self._ticks[market_type]
-        self._ticks[market_type] = []  # Clear processed ticks
+        ticks, self._ticks[market_type] = self._ticks[market_type], []  # Atomic swap to avoid losing ticks that arrive during processing
         
         if ticks:
             df = pl.DataFrame([tick.to_dict() for tick in ticks]).select(

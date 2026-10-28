@@ -68,7 +68,6 @@ class OrderManager:
         self.api.update_status()
 
     def list_trades(self) -> List:
-        self.update_status()
         return self.api.list_trades()
 
     def update_order_price(self, order_id: str, new_price: float):

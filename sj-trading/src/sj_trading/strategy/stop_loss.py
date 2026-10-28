@@ -5,6 +5,7 @@ from ..data.quote import QuoteManager
 from ..utils.gsheet import GoogleSheetClient
 from shioaji.constant import Action, OrderType, FuturesPriceType
 import shioaji as sj
+import threading
 import time
 import os
 from datetime import datetime
@@ -40,6 +41,7 @@ class StopLossStrategy(BaseStrategy):
         self.tp_order_id = None
         self.sl_order_id = None
         self.position_closed = False
+        self._sl_lock = threading.Lock()  # Prevent duplicate SL execution from concurrent ticks
         
         # Trade Data
         self.entry_price = 0.0
@@ -130,63 +132,73 @@ class StopLossStrategy(BaseStrategy):
         
         # OCO Logic
         if self.direction == "long":
-             if current_price <= self.sl_price:
-                 self.notifier.notify("⚡ Stop Loss Triggered", f"Price {current_price} <= SL {self.sl_price}")
-                 self._trigger_sl_execution(Action.Sell, current_price)
-                 
-        else: # Short
-             if current_price >= self.sl_price:
-                 self.notifier.notify("⚡ Stop Loss Triggered", f"Price {current_price} >= SL {self.sl_price}")
-                 self._trigger_sl_execution(Action.Buy, current_price)
+            if current_price <= self.sl_price:
+                self.notifier.notify("⚡ Stop Loss Triggered", f"Price {current_price} <= SL {self.sl_price}")
+                self._trigger_sl_execution(Action.Sell, current_price)
+        else:  # Short
+            if current_price >= self.sl_price:
+                self.notifier.notify("⚡ Stop Loss Triggered", f"Price {current_price} >= SL {self.sl_price}")
+                self._trigger_sl_execution(Action.Buy, current_price)
 
     def _trigger_sl_execution(self, action: Action, price: float):
-        self.position_closed = True 
-        
+        # Lock ensures only the first tick that crosses SL executes this block.
+        # Without the lock, concurrent tick callbacks could place multiple SL orders.
+        with self._sl_lock:
+            if self.position_closed:
+                return
+            self.position_closed = True
+
         # 1. Cancel TP Order
         if self.tp_order_id:
             self.notifier.notify("Cancelling TP", f"ID: {self.tp_order_id}")
             try:
                 self.order_manager.cancel_order(self.tp_order_id)
             except Exception as e:
-                 print(f"Error cancelling TP: {e}")
-        
+                print(f"Error cancelling TP: {e}")
+
         # 2. Place Market SL Order
         self.notifier.notify("Executing SL Market Order", f"Action: {action}, Qty: {self.qty}")
         try:
-             trade = self.order_manager.place_futures_order(
-                 code=self.symbol,
-                 action=action,
-                 price=price, 
-                 quantity=self.qty,
-                 price_type=FuturesPriceType.MKT,
-                 order_type=OrderType.ROD 
-             )
-             self.sl_order_id = trade.status.id
-             self.notifier.notify("SL Order Sent", "Market Order Placed successfully.")
+            trade = self.order_manager.place_futures_order(
+                code=self.symbol,
+                action=action,
+                price=price,
+                quantity=self.qty,
+                price_type=FuturesPriceType.MKT,
+                order_type=OrderType.ROD
+            )
+            self.sl_order_id = trade.status.id
+            self.notifier.notify("SL Order Sent", "Market Order Placed successfully.")
         except Exception as e:
-             self.notifier.notify("❌ SL Order Execution Failed", str(e))
+            self.notifier.notify("❌ SL Order Execution Failed", str(e))
 
     # Callback for Trade execution
     def on_trade(self, trade):
-         if not self.is_running:
-             return
+        if not self.is_running:
+            return
 
-         order_id = trade.order.id
-         deal_price = float(trade.price)
-         
-         # Case 1: TP Filled
-         if self.tp_order_id and order_id == self.tp_order_id:
-             self.notifier.notify("🚀 Take Profit Executed!", f"Order {order_id} filled at {deal_price}.")
-             self._log_trade_record(deal_price)
-             self.position_closed = True
-             self.stop()
-             
-         # Case 2: SL Filled
-         elif self.sl_order_id and order_id == self.sl_order_id:
-             self.notifier.notify("⚡ Stop Loss Executed!", f"Order {order_id} filled at {deal_price}.")
-             self._log_trade_record(deal_price)
-             self.position_closed = True
-             self.stop()
+        # on_trade fires on every partial fill too; only act when fully filled
+        if trade.status.status.name != "Filled":
+            return
+
+        order_id = trade.order.id
+        deal_price = float(trade.price)
+
+        # Case 1: TP Filled
+        if self.tp_order_id and order_id == self.tp_order_id:
+            with self._sl_lock:
+                if self.position_closed:
+                    return
+                self.position_closed = True
+            self.notifier.notify("🚀 Take Profit Executed!", f"Order {order_id} filled at {deal_price}.")
+            self._log_trade_record(deal_price)
+            self.stop()
+
+        # Case 2: SL Filled
+        elif self.sl_order_id and order_id == self.sl_order_id:
+            self.notifier.notify("⚡ Stop Loss Executed!", f"Order {order_id} filled at {deal_price}.")
+            self._log_trade_record(deal_price)
+            self.stop()
 
     def _log_trade_record(self, exit_price: float):
         if not self.gs_client:

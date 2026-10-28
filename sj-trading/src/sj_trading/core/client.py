@@ -56,7 +56,8 @@ class ShioajiClient:
     def get_api(cls) -> sj.Shioaji:
         """Helper to get the underlying api object directly if instantiated."""
         if cls._instance is None:
-             # Default to simulation if not initialized (or raise error depending on design)
-             # Better to raise error or force init. Here we lazily init as sim for safety if not called before.
-             cls(simulation=True)
+            raise RuntimeError(
+                "ShioajiClient has not been initialized. "
+                "Call ShioajiClient(simulation=True/False) before using get_api()."
+            )
         return cls._instance.api

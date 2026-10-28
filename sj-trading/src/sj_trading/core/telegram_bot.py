@@ -127,7 +127,6 @@ class TelegramBotManager:
         self._send_reply(msg)
 
     def _cmd_list(self):
-        # Force a status update before listing
         self.om.update_status()
         trades = self.om.list_trades()
         
@@ -185,9 +184,18 @@ class TelegramBotManager:
             
         code = args[0].upper()
         action_str = args[1].lower()
-        price = float(args[2])
-        qty = int(args[3])
-        
+
+        if action_str not in ("buy", "sell"):
+            self._send_reply(f"❌ Invalid action `{action_str}`. Must be `buy` or `sell`.")
+            return
+
+        try:
+            price = float(args[2])
+            qty = int(args[3])
+        except ValueError:
+            self._send_reply("❌ Invalid price or quantity. Price must be a number, qty must be an integer.")
+            return
+
         act_enum = Action.Buy if action_str == "buy" else Action.Sell
         
         # Check if Future or Stock via InfoManager or Shioaji API Contracts
@@ -237,7 +245,7 @@ class TelegramBotManager:
         lines = []
         if "Futures" in results and not results["Futures"].is_empty():
             lines.append("📈 *Futures*")
-            for row in results["Futures"].iter_rows(named=True):
+            for row in results["Futures"].head(5).iter_rows(named=True):
                 lines.append(f"`{row['Symbol']}` - {row['Name']}")
                 
         if "Stocks" in results and not results["Stocks"].is_empty():

@@ -13,7 +13,8 @@ app = typer.Typer()
 @app.command()
 def reload_contracts(
     type: str = typer.Option("all", help="all, future, or stock"),
-    file_path: str = typer.Option(None, help="Custom file path")
+    file_path: str = typer.Option(None, help="Custom file path"),
+    download: bool = typer.Option(False, help="Download the latest stock/ETF files from TWSE first")
 ):
     """
     Reload contract info.
@@ -24,13 +25,16 @@ def reload_contracts(
         if type in ["all", "future"]:
              im.reload_data(file_path)
              print("Futures/Options info reloaded.")
-        
+
         if type in ["all", "stock"]:
+             if download:
+                 im.download_stock_data()
              im.reload_stock_data(file_path)
              print("Stock info reloaded.")
-             
+
     except Exception as e:
         print(f"Error reloading data: {e}")
+        raise typer.Exit(1)
 
 @app.command()
 def info(query: str):
@@ -91,32 +95,93 @@ def monitor_strategy(
         print("Strategy stopped.")
 
 @app.command()
-def quote(codes: List[str], type: str = "future"):
+def quote(
+    codes: List[str],
+    type: str = "future",
+    sim: bool = typer.Option(True, help="Set --no-sim for real trading"),
+    chart: str = typer.Option("table", help="Display mode: 'table', 'line', or 'kbar'"),
+):
     """
     Subscribe and print quotes for given codes.
-    Type: 'future' or 'stock'
+    Type: 'future' or 'stock'. Chart: 'table' (default), 'line', or 'kbar'.
     """
-    client = ShioajiClient(simulation=True)
+    import polars as pl
+    from datetime import datetime, timedelta
+
+    client = ShioajiClient(simulation=sim)
     qm = QuoteManager(client.api)
-    
+
     print(f"Subscribing to {codes}...")
     if type == "future":
         qm.subscribe_fop_tick(codes, recover=True)
     else:
         qm.subscribe_stk_tick(codes, recover=True)
 
+    def _filter_recent(df: pl.DataFrame, minutes: int = 30) -> pl.DataFrame:
+        """Only keep ticks from the last N minutes to avoid recover data gap."""
+        if df.is_empty():
+            return df
+        cutoff = df["datetime"].max() - timedelta(minutes=minutes)
+        return df.filter(pl.col("datetime") >= cutoff)
+
     try:
         last_count = 0
         while True:
-            if type == "future":
-                df = qm.get_df_fop()
-            else:
-                df = qm.get_df_stk()
-            
-            if len(df) > last_count:
-                print(df.slice(last_count))
-                last_count = len(df)
-            
+            df = qm.get_df_fop() if type == "future" else qm.get_df_stk()
+
+            if chart == "table":
+                if len(df) > last_count:
+                    print(df.slice(last_count))
+                    last_count = len(df)
+
+            elif chart == "line":
+                import plotext as plt
+                if df.is_empty():
+                    time.sleep(1)
+                    continue
+                plt.clf()
+                plt.theme("dark")
+                actual_codes = df["code"].unique().to_list()
+                for code in actual_codes:
+                    code_df = _filter_recent(df.filter(pl.col("code") == code)).tail(200)
+                    if not code_df.is_empty():
+                        plt.plot(code_df["price"].to_list(), label=code)
+                plt.title("Live Price")
+                plt.xlabel("Ticks")
+                plt.ylabel("Price")
+                print("\033[H", end="")
+                plt.show()
+                # Clear any leftover lines from previous taller frame
+                print("\033[J", end="")
+
+            elif chart == "kbar":
+                import plotext as plt
+                if df.is_empty():
+                    time.sleep(1)
+                    continue
+                plt.clf()
+                plt.theme("dark")
+                plt.date_form("H:M")
+                actual_codes = df["code"].unique().to_list()
+                for code in actual_codes:
+                    code_df = _filter_recent(df.filter(pl.col("code") == code), minutes=60)
+                    if not code_df.is_empty():
+                        kbar = qm._aggregate_kbar(code_df, "1m", []).sort("datetime")
+                        if not kbar.is_empty():
+                            kbar = kbar.tail(60)
+                            dates = kbar["datetime"].dt.strftime("%H:%M").to_list()
+                            ohlc = {
+                                "Open": kbar["open"].to_list(),
+                                "High": kbar["high"].to_list(),
+                                "Low": kbar["low"].to_list(),
+                                "Close": kbar["close"].to_list(),
+                            }
+                            plt.candlestick(dates, ohlc)
+                plt.title("1m K-Bar")
+                print("\033[H", end="")
+                plt.show()
+                print("\033[J", end="")
+
             time.sleep(1)
     except KeyboardInterrupt:
         print("Stopping...")

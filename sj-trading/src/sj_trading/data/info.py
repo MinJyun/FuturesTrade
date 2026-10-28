@@ -1,5 +1,6 @@
 import pandas as pd
 import polars as pl
+import requests
 from pathlib import Path
 from typing import Optional, Dict
 
@@ -10,6 +11,10 @@ class InfoManager:
     STOCK_DATA_PATH = Path("file/C_public.html")  # TWSE listed stocks
     OTC_STOCK_DATA_PATH = Path("file/C_public_4.html")  # OTC stocks
     STOCK_CACHE_PATH = Path("file/stock_info.parquet")
+
+    STOCK_DATA_URL = "https://isin.twse.com.tw/isin/C_public.jsp?strMode=2"
+    OTC_STOCK_DATA_URL = "https://isin.twse.com.tw/isin/C_public.jsp?strMode=4"
+    MIN_DOWNLOAD_BYTES = 500_000  # guard against error pages overwriting good data
 
     def __init__(self):
         pass
@@ -64,6 +69,27 @@ class InfoManager:
         df.write_parquet(self.CACHE_PATH)
         print(f"Futures data saved to {self.CACHE_PATH}")
         return df
+
+    def download_stock_data(self) -> None:
+        """Download the latest TWSE/OTC ISIN files, overwriting the local copies."""
+        self.STOCK_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+        for url, path in [
+            (self.STOCK_DATA_URL, self.STOCK_DATA_PATH),
+            (self.OTC_STOCK_DATA_URL, self.OTC_STOCK_DATA_PATH),
+        ]:
+            print(f"Downloading {url}...")
+            resp = requests.get(url, timeout=60)
+            resp.raise_for_status()
+
+            if len(resp.content) < self.MIN_DOWNLOAD_BYTES:
+                raise ValueError(
+                    f"Downloaded file too small ({len(resp.content)} bytes), "
+                    f"keeping existing {path}: {url}"
+                )
+
+            path.write_bytes(resp.content)
+            print(f"Saved to {path} ({len(resp.content):,} bytes)")
 
     def _parse_stock_html(self, path: Path) -> Optional[pd.DataFrame]:
         """Parse a single stock HTML file and return a pandas DataFrame.
